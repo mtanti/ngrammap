@@ -120,6 +120,10 @@ class NGramMap():
         """ Get an iterator over all (n-gram, value) pairs in the mapping. """
         return self.root.items()
 
+    def elements(self):
+        """ Get an iterator over all elements in all n-grams in the mapping. """
+        return self.root.descendent_counts.keys()
+
     def __iter__(self):
         """ Iterate over all the n-grams in the mapping. Returned n-grams are tuples. """
         return self.root.ngrams()
