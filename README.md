@@ -1,7 +1,7 @@
 ngrammap
 ========
 
-A python 3 data structure class for storing and querying n-grams.
+A python data structure class for storing and querying n-grams.
 
 To add n-grams
 --------------
@@ -55,7 +55,7 @@ Adding the n-grams (a,a,a), (a,a,b), (a,b,a), (b,a,a) several times which map to
             x[ngram] = 0
         x[ngram] += 1
         
-    for ngram in x.wildcarded_ngrams(( ..., 'x', 'y' )):
+    for ngram in x.ngrams_by_pattern(( None, 'x', 'y' ), { 0 }):
         print(ngram, x[ngram])
 
 To find elements which share similar contexts
@@ -74,7 +74,6 @@ You can find elements which occur in the same context in their n-grams, for exam
         print(element)
         for ngram in x.ngrams_with_eles({ element }):
             ele_index = ngram.index(element)
-            ngram_pattern = tuple( ((i == ele_index) and ... or ngram[i]) for i in range(len(ngram)) )
-            for ngram_ in x.wildcarded_ngrams(ngram_pattern):
+            for ngram_ in x.ngrams_by_pattern(ngram, { ele_index }):
                 if ngram_[ele_index] != element:
                     print("\t", ngram_[ele_index])

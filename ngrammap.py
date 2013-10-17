@@ -49,26 +49,33 @@ __author__ = "Marc Tanti"
 __copyright__ = "Copyright 2013, http://www.marctanti.com"
 __credits__ = ["Marc Tanti"]
 __license__ = "MIT"
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __maintainer__ = "Marc Tanti"
 __status__ = "Prototype"
 
 class NGramMap():
-    """ Map n-grams to values. N-grams must consist of hashable elements and the container must be ordered and its length defined. The contained used is irrelevant as it is not used internally. """
+    """ Map n-grams to values. N-grams must consist of hashable elements and the container must be ordered and its length defined. The container used is irrelevant as it is not used internally. """
     
     def __init__(self):
         """ Create a new n-gram map. """
         self.root = _NGramMapNode()
         self.size_freqs = dict() #A dictionary recording the frequencies of each n-gram size.
+        self.element_freqs = dict() #A dictionary recording the frequencies of all elements in all n-grams.
 
     def __setitem__(self, ngram, value):
         """ Assign a value to an n-gram, overwriting the existing value if the n-gram exists. 'ngram' must be hashable and in an ordered container whose length is defined. """
-        #Record size of n-gram.
         ngram_size = len(ngram)
         if ngram not in self:
+            #Record size of n-gram.
             if ngram_size not in self.size_freqs:
                 self.size_freqs[ngram_size] = 0
             self.size_freqs[ngram_size] += 1
+
+            #Record elements of n-gram.
+            for element in ngram:
+                if element not in self.element_freqs:
+                    self.element_freqs[element] = 0
+                self.element_freqs[element] += 1
 
         self.root.__setitem__(ngram, value)
 
@@ -81,6 +88,12 @@ class NGramMap():
         self.size_freqs[ngram_size] -= 1
         if self.size_freqs[ngram_size] == 0:
             self.size_freqs.pop(ngram_size)
+
+        #Dismiss elements of n-gram.    
+        for element in ngram:
+            self.element_freqs[element] -= 1
+            if self.element_freqs[element] == 0:
+                self.element_freqs.pop(element)
         
         return value
 
@@ -108,9 +121,9 @@ class NGramMap():
         """ Get an iterator over all the n-grams of a particular size which contain all the given target elements in any order. 'targets' must be a set of elements. Returned n-grams are tuples. """
         return self.root.sized_ngrams_with_eles(targets, size)
 
-    def wildcarded_ngrams(self, ngram_pattern):
-        """ Get an iterator over all the n-grams which match an n-gram pattern consisting of elements and Ellipsis (...). Ellipsis signify that any element can take its place. 'ngram_pattern' must be an ordered container whose length is defined and whose elements are hashable. Returned n-grams are tuples. """
-        return self.root.wildcarded_ngrams(ngram_pattern)
+    def ngrams_by_pattern(self, ngram_pattern, placeholder_indices):
+        """ Get an iterator over all the n-grams which match an n-gram pattern consisting of elements, some of which will be ignored as placeholders. Placeholders are used to signify that any element can take their place. The indices of the placeholders must be specified. Returned n-grams are tuples. """
+        return self.root.ngrams_by_pattern(ngram_pattern, placeholder_indices)
 
     def values(self):
         """ Get an iterator over all the values in the mapping. """
@@ -122,7 +135,7 @@ class NGramMap():
 
     def elements(self):
         """ Get an iterator over all elements in all n-grams in the mapping. """
-        return self.root.descendent_counts.keys()
+        return self.element_freqs.keys()
 
     def __iter__(self):
         """ Iterate over all the n-grams in the mapping. Returned n-grams are tuples. """
@@ -174,8 +187,7 @@ class _NGramMapNode():
         self.end_of_ngram = False #Flag marking whether this node is the end of an n-gram.
         self.value = None #Provided that the node marks the end of an n-gram, this refers to the value mapped by this n-gram.
         self.children = dict() #A dictionary which maps the next elements in the current path of the prefix tree to the respective node of the tree.
-        self.descendent_counts = dict() #A dictionary which maps the elements which are found in all the descendent nodes of this node to their frequency (frequency is used during removal of n-grams from tree).
-
+        
     def __setitem__(self, ngram, value):
         """ Assign a value to an n-gram, overwriting the existing value if the n-gram exists. """
         #N-gram is consumed element by element from first to last and each time this function will pass the rest of the n-gram to the next node.
@@ -189,12 +201,6 @@ class _NGramMapNode():
         else:
             next_ele = ngram[0]
             rest_ngram = ngram[1:]
-
-            #Update descendent counts with elements in the n-gram.
-            for ele in ngram:
-                if ele not in self.descendent_counts:
-                    self.descendent_counts[ele] = 0
-                self.descendent_counts[ele] += 1
 
             #Create a new child node if the next element does not lead to anywhere and recurse on it.
             if next_ele not in self.children:
@@ -224,7 +230,7 @@ class _NGramMapNode():
             rest_ngram = ngram[1:]
 
             #If n-gram does not exist then raise an error.
-            if next_ele in self.children and all([ ele in self.children[next_ele].descendent_counts for ele in rest_ngram ]):
+            if next_ele in self.children:
                 value = None
                 try:
                     #Recursive line
@@ -237,13 +243,6 @@ class _NGramMapNode():
                 #Remove the child node leading to the terminating node if it has no children of its own.
                 if len(self.children[next_ele].children) == 0:
                     self.children.pop(next_ele)
-
-                #Decrement counts of elements in descendent nodes for each element in the n-gram.
-                #If an element has been completely eliminated then remove it from the dictionary so that this node does not indicate that it contains those elements somewhere among its descendents.
-                for ele in ngram:
-                    self.descendent_counts[ele] -= 1
-                    if self.descendent_counts[ele] == 0:
-                        self.descendent_counts.pop(ele)
 
                 return value
             else:
@@ -267,7 +266,7 @@ class _NGramMapNode():
             rest_ngram = ngram[1:]
 
             #If n-gram does not exist then raise an error.
-            if next_ele in self.children and all([ ele in self.children[next_ele].descendent_counts for ele in rest_ngram ]):
+            if next_ele in self.children:
                 try:
                     return self.children[next_ele].__getitem__(rest_ngram)
                 except KeyError:
@@ -292,7 +291,7 @@ class _NGramMapNode():
             rest_ngram = ngram[1:]
 
             #If n-gram does not exist then return false.
-            if next_ele in self.children and all([ ele in self.children[next_ele].descendent_counts for ele in rest_ngram ]):
+            if next_ele in self.children:
                 return self.children[next_ele].__contains__(rest_ngram)
             else:
                 return False
@@ -350,11 +349,9 @@ class _NGramMapNode():
         #For each next element, construct the new partial n-gram and pass it to that element's child node, yielding every n-gram it yields.
         for ele in self.children:
             new_targets = targets - { ele }
-            #Only follow this path if it leads to all required n-gram elements.
-            if all([ target in self.children[ele].descendent_counts for target in new_targets ]):
-                new_ngram = partial_ngram+(ele,)
-                for ngram in self.children[ele].__ngrams_with_eles(new_targets, new_ngram):
-                    yield ngram
+            new_ngram = partial_ngram+(ele,)
+            for ngram in self.children[ele].__ngrams_with_eles(new_targets, new_ngram):
+                yield ngram
 
     def sized_ngrams_with_eles(self, targets, size):
         """ Get an iterator over all the n-grams of a particular size which contain all the given target elements in any order. 'targets' must be a set of elements. Returned n-grams are tuples. """
@@ -373,45 +370,38 @@ class _NGramMapNode():
             #For each next element, construct the new partial n-gram and pass it to that element's child node, yielding every n-gram it yields.
             for ele in self.children:
                 new_targets = targets - { ele }
-                #Only follow this path if it leads to all required n-gram elements.
-                if all([ target in self.children[ele].descendent_counts for target in new_targets ]):
-                    new_ngram = partial_ngram+(ele,)
-                    for ngram in self.children[ele].__sized_ngrams_with_eles(new_targets, size - 1, new_ngram):
-                        yield ngram
+                new_ngram = partial_ngram+(ele,)
+                for ngram in self.children[ele].__sized_ngrams_with_eles(new_targets, size - 1, new_ngram):
+                    yield ngram
 
-    def wildcarded_ngrams(self, ngram_pattern):
-        """ Get an iterator over all the n-grams which match an n-gram pattern consisting of elements and Ellipsis (...). Ellipsis signify that any element can take its place. Returned n-grams are tuples. """
-        return self.__wildcarded_ngrams(ngram_pattern, ())
-    def __wildcarded_ngrams(self, ngram_pattern, partial_ngram):
-        """ Helper method to wildcarded_ngrams(). """
+    def ngrams_by_pattern(self, ngram_pattern, placeholder_indices):
+        """ Get an iterator over all the n-grams which match an n-gram pattern consisting of elements, some of which will be ignored as placeholders. Placeholders are used to signify that any element can take their place. The indices of the placeholders must be specified. Returned n-grams are tuples. """
+        return self.__ngrams_by_pattern(ngram_pattern, placeholder_indices, 0, ())
+    def __ngrams_by_pattern(self, ngram_pattern, placeholder_indices, curr_index, partial_ngram):
+        """ Helper method to ngrams_by_pattern(). """
         #An n-gram is constructed element by element and passed on to each of the child nodes.
         #When the n-gram pattern has been followed completely, it will yield the complete n-gram which was passed to it by its parents.
         
         #If all the n-gram pattern was followed completely and this is a terminating node then yield the n-gram constructed so far.
         #Stop recursion since any further recursion can only lead to longer n-grams than the n-gram pattern.
-        if len(ngram_pattern) == 0:
+        if curr_index == len(ngram_pattern):
             if self.end_of_ngram:
                 yield partial_ngram
         else:
-            next_ele = ngram_pattern[0]
-            rest_pattern = ngram_pattern[1:]
-
-            #If the next element in the n-gram pattern is a wild card, go through every child of the current node as the next element in the n-gram.
-            if next_ele == ...:
+            next_ele = ngram_pattern[curr_index]
+            
+            #If the next element in the n-gram pattern is a placeholder, go through every child of the current node as the next element in the n-gram.
+            if curr_index in placeholder_indices:
                 #For each next element, construct the new partial n-gram and pass it to that element's child node, yielding every n-gram it yields.
                 for ele in self.children:
-                    #Only follow this path if it leads to all required n-gram elements.
-                    if all([ target in self.children[ele].descendent_counts for target in rest_pattern if target != ... ]):
-                        new_ngram = partial_ngram+(ele,)
-                        for ngram in self.children[ele].__wildcarded_ngrams(rest_pattern, new_ngram):
-                            yield ngram
-            #If the next element in the n-gram pattern is an n-gram element, go through the child which is associated with that element.
-            elif next_ele in self.children:
-                #Only follow this path if it leads to all required n-gram elements.
-                if all([ target in self.children[next_ele].descendent_counts for target in rest_pattern if target != ... ]):
-                    new_ngram = partial_ngram+(next_ele,)
-                    for ngram in self.children[next_ele].__wildcarded_ngrams(rest_pattern, new_ngram):
+                    new_ngram = partial_ngram+(ele,)
+                    for ngram in self.children[ele].__ngrams_by_pattern(ngram_pattern, placeholder_indices, curr_index+1, new_ngram):
                         yield ngram
+            #If the next element in the n-gram pattern is not a placeholder, go through the child which is associated with that element.
+            elif next_ele in self.children:
+                new_ngram = partial_ngram+(next_ele,)
+                for ngram in self.children[next_ele].__ngrams_by_pattern(ngram_pattern, placeholder_indices, curr_index+1, new_ngram):
+                    yield ngram
 
     def values(self):
         """ Get an iterator over all the values in the mapping. """
