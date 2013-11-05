@@ -40,11 +40,11 @@ Adding the n-grams (a,a,a), (a,a,b), (a,b,a), (b,a,a) several times which map to
             x[ngram] = 0
         x[ngram] += 1
         
-    for ngram in x.ngrams_with_eles({ 'a', 'y' }):
+    for ngram in x.ngrams_with_ele('a'):
         print(ngram, x[ngram])
 
-To find n-grams which follow a particular pattern
--------------------------------------------------
+To find n-grams which follow a particular template
+--------------------------------------------------
 Adding the n-grams (a,a,a), (a,a,b), (a,b,a), (b,a,a) several times which map to the number of times they were encountered.
 
     ngrams = [ ('a','x','y'), ('x','a','y'), ('a','x','y'), ('b','x','y'), ('c','x','z')  ]
@@ -55,7 +55,7 @@ Adding the n-grams (a,a,a), (a,a,b), (a,b,a), (b,a,a) several times which map to
             x[ngram] = 0
         x[ngram] += 1
         
-    for ngram in x.ngrams_by_pattern(( None, 'x', 'y' ), { 0 }):
+    for ngram in x.ngrams_by_template(( None, 'x', 'y' ), { 0 }):
         print(ngram, x[ngram])
 
 To find elements which share similar contexts
@@ -70,10 +70,10 @@ You can find elements which occur in the same context in their n-grams, for exam
             x[ngram] = 0
         x[ngram] += 1
         
-    for element in x.elements():
-        print(element)
-        for ngram in x.ngrams_with_eles({ element }):
-            ele_index = ngram.index(element)
-            for ngram_ in x.ngrams_by_pattern(ngram, { ele_index }):
-                if ngram_[ele_index] != element:
+    for ele in x.ngram_eles():
+        print(ele)
+        for ngram in x.ngrams_with_ele(ele):
+            ele_index = ngram.index(ele)
+            for ngram_ in x.ngrams_by_template(ngram, { ele_index }):
+                if ngram_[ele_index] != ele:
                     print("\t", ngram_[ele_index])
