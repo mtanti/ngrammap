@@ -96,7 +96,7 @@ class GeneralTests(unittest.TestCase):
         self.assertFalse((1,2,2) in obj)
         self.assertFalse((1,2,2,3) in obj)
 
-    def testElements(self):
+    def testNGramEles(self):
         obj = NGramMap()
 
         obj[(1,2)] = True
@@ -107,7 +107,21 @@ class GeneralTests(unittest.TestCase):
         obj[(1,1,2)] = True
         obj[(3,2,1)] = True
 
-        self.assertEqual(set(obj.elements()), { 1, 2, 3, 4, 5 })
+        self.assertEqual(set(obj.ngram_eles()), { 1, 2, 3, 4, 5 })
+
+    def testNGramSizes(self):
+        obj = NGramMap()
+
+        obj[(1,2)] = True
+        obj[(2,1)] = True
+        obj[(1,2,3)] = True
+        obj[(4,2,3)] = True
+        obj[(1,5,3)] = True
+        obj[(1,1,2)] = True
+        obj[(3,2,1)] = True
+        obj[(3,2,1,5,6)] = True
+
+        self.assertEqual(set(obj.ngram_sizes()), { 2, 3, 5 })
 
     def testNgrams(self):
         obj = NGramMap()
@@ -149,7 +163,7 @@ class GeneralTests(unittest.TestCase):
         assert len(ngrams) == len(set(ngrams))
         self.assertEqual(set(obj.sized_ngrams(2)), set(ngrams))
 
-    def testNgramsWithElesShort(self):
+    def testNgramsWithEle(self):
         obj = NGramMap()
 
         ngrams = []
@@ -171,9 +185,9 @@ class GeneralTests(unittest.TestCase):
                     obj[(a,b,c)] = True
 
         assert len(ngrams) == len(set(ngrams))
-        self.assertEqual(set(obj.ngrams_with_eles({ 2 })), set(ngrams))
+        self.assertEqual(set(obj.ngrams_with_ele(2)), set(ngrams))
 
-    def testNgramsWithElesLong(self):
+    def testNgramsWithAllEles(self):
         obj = NGramMap()
 
         ngrams = []
@@ -206,9 +220,29 @@ class GeneralTests(unittest.TestCase):
                             obj[(a,b,c,d,e)] = True
 
         assert len(ngrams) == len(set(ngrams))
-        self.assertEqual(set(obj.ngrams_with_eles({ 2, 3, 4 })), set(ngrams))
+        self.assertEqual(set(obj.ngrams_with_all_eles({ 2, 3, 4 })), set(ngrams))
 
-    def testSizedNgramsWithEles(self):
+    def testSizedNgramsWithEle(self):
+        obj = NGramMap()
+
+        ngrams = []
+        obj[()] = True
+        for a in range(5):
+            obj[(a,)] = True
+        for a in range(5):
+            for b in range(5):
+                if a == 2 or b == 2:
+                    ngrams.append((a,b))
+                obj[(a,b)] = True
+        for a in range(5):
+            for b in range(5):
+                for c in range(5):
+                    obj[(a,b,c)] = True
+
+        assert len(ngrams) == len(set(ngrams))
+        self.assertEqual(set(obj.sized_ngrams_with_ele(2, 2)), set(ngrams))
+
+    def testSizedNgramsWithAllEles(self):
         obj = NGramMap()
 
         ngrams = []
@@ -237,9 +271,9 @@ class GeneralTests(unittest.TestCase):
                             obj[(a,b,c,d,e)] = True
 
         assert len(ngrams) == len(set(ngrams))
-        self.assertEqual(set(obj.sized_ngrams_with_eles({ 2, 3, 4 }, 4)), set(ngrams))
+        self.assertEqual(set(obj.sized_ngrams_with_all_eles({ 2, 3, 4 }, 4)), set(ngrams))
 
-    def testNgramsByPatternShort(self):
+    def testNgramsByTemplateShort(self):
         obj = NGramMap()
 
         ngrams = []
@@ -257,9 +291,9 @@ class GeneralTests(unittest.TestCase):
                     obj[(a,b,c)] = True
 
         assert len(ngrams) == len(set(ngrams))
-        self.assertEqual(set(obj.ngrams_by_pattern(( 1, None, 2 ), { 1 })), set(ngrams))
+        self.assertEqual(set(obj.ngrams_by_template(( 1, None, 2 ), { 1 })), set(ngrams))
 
-    def testNgramsByPatternLong(self):
+    def testNgramsByTemplateLong(self):
         obj = NGramMap()
 
         ngrams = []
@@ -295,7 +329,7 @@ class GeneralTests(unittest.TestCase):
                                 obj[(a,b,c,d,e,f)] = True
 
         assert len(ngrams) == len(set(ngrams))
-        self.assertEqual(set(obj.ngrams_by_pattern(( None, 1, None, 2, None ), { 0, 2, 4 })), set(ngrams))
+        self.assertEqual(set(obj.ngrams_by_template(( None, 1, None, 2, None ), { 0, 2, 4 })), set(ngrams))
 
     def testValues(self):
         obj = NGramMap()
@@ -423,6 +457,17 @@ class GeneralTests(unittest.TestCase):
                     
         assert n == 0
 
+    def testPopChain(self):
+        obj = NGramMap()
+
+        obj[(1,)] = 0
+        obj[(1,2)] = 1
+        obj[(1,2,3)] = 2
+
+        self.assertEqual(obj.pop((1,2,3)), 2)
+        self.assertEqual(obj.pop((1,2)), 1)
+        self.assertEqual(obj.pop((1,)), 0)
+
     def testPopInterpersed(self):
         obj = NGramMap()
 
@@ -519,7 +564,7 @@ import random
 num_ngrammaps = 500
 
 for max_ngram_size in [3, 10]:
-    for max_ele_value in [3, 10]:
+    for max_ele_value in [2, 100]:
         print()
         print("====================================")
         print("max ngram size", max_ngram_size)
@@ -551,19 +596,19 @@ for max_ngram_size in [3, 10]:
     
         t = time.clock()
         for i in range(num_ngrammaps):
-            list(ngrammaps[i].ngrams_with_eles({ random.randint(1,max_ele_value) }))
-        print("ngrams_with_eles short timing:", round(time.clock() - t, 2))
+            list(ngrammaps[i].ngrams_with_ele(random.randint(1,max_ele_value)))
+        print("ngrams_with_ele timing:", round(time.clock() - t, 2))
 
         t = time.clock()
         for i in range(num_ngrammaps):
-            list(ngrammaps[i].ngrams_with_eles({ random.randint(1,max_ele_value) for _ in range(random.randint(1,max_ngram_size)) }))
-        print("ngrams_with_eles long timing:", round(time.clock() - t, 2))
+            list(ngrammaps[i].ngrams_with_all_eles({ random.randint(1,max_ele_value) for _ in range(random.randint(1,max_ngram_size)) }))
+        print("ngrams_with_all_eles timing:", round(time.clock() - t, 2))
 
         t = time.clock()
         for i in range(num_ngrammaps):
             ngram = random.choice(ngrams[i])
-            list(ngrammaps[i].ngrams_by_pattern(ngram, { j for j in range(len(ngram)) if random.random() > 0.5 } ))
-        print("ngrams_by_pattern timing:", round(time.clock() - t, 2))
+            list(ngrammaps[i].ngrams_by_template(ngram, { j for j in range(len(ngram)) if random.random() > 0.5 } ))
+        print("ngrams_by_template timing:", round(time.clock() - t, 2))
 
         t = time.clock()
         for i in range(num_ngrammaps):
